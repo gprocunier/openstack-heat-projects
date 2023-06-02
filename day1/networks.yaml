@@ -1,6 +1,6 @@
 heat_template_version: wallaby
 
-# setup the provider/internal networks and initialize a tenant network
+# setup the provider/external networks and initialize a tenant network
  
 parameters:
   public_network:
