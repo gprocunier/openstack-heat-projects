@@ -1,0 +1,84 @@
+heat_template_version: wallaby
+
+# feed a real sshkey via stdin into ssh_pub_key
+# Example:
+#   openstack stack create -v --wait \
+#     -t ./server.yaml \
+#     --parameter ssh_pub_key="$(</home/greg/.ssh/id_rsa.pub)" \
+#     stack-testserver
+#
+description: Simple template to deploy a single compute instance
+
+parameters:
+  public_network:
+    type: string
+    default: external
+  ssh_pub_key:
+    type: string
+
+resources:
+
+  my_port:
+    type: OS::Neutron::Port
+    properties:
+      network: internal
+      security_groups:
+        - default
+
+  my_instance:
+    type: OS::Nova::Server
+    properties:
+      name: heat-instance-1
+      flavor: m1.small
+      networks:
+        - port: { get_resource: my_port }
+      block_device_mapping_v2:
+        - device_name: vda
+          delete_on_termination: true
+          boot_index: 0
+          image: Fedora-Cloud-Base-38-1.6.x86_64
+          volume_size: 15
+      user_data_format: RAW
+      user_data:
+        get_resource: cloud-init-config
+
+  cloud-init-config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        manage_etc_hosts: true
+        users:
+          - name: cloud
+            sudo: ALL=(ALL) NOPASSWD:ALL
+            shell: /bin/bash
+            lock_passwd: false
+            ssh_authorized_keys:
+              get_param: ssh_pub_key
+
+  my_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: external
+
+  my_floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: my_floating_ip }
+      port_id: { get_resource: my_port }
+
+outputs:
+  instance_id:
+    description: The ID of the instance created
+    value: { get_resource: my_instance }
+  instance_name:
+    description: The name of the instance
+    value: { get_attr: [my_instance, name] }
+  instance_ip:
+    description: The IP address of the instance created
+    value: { get_attr: [my_instance, first_address] }
+  floating_ip:
+    description: The Floating IP created
+    value: { get_attr: [my_floating_ip, floating_ip_address] }
+  port_id:
+    description: The ID of the port created
+    value: { get_resource: my_port }

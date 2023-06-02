@@ -1,0 +1,74 @@
+heat_template_version: wallaby
+
+# setup the provider/internal networks and initialize a tenant network
+ 
+parameters:
+  public_network:
+    type: string
+    default: external
+
+resources:
+
+  external_network:
+    type: OS::Neutron::ProviderNet
+    properties:
+      name: "external"
+      shared: true
+      network_type: flat
+      physical_network: external
+      router_external: true
+
+  external_network_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: "external network"
+      network:
+        get_resource: external_network
+      cidr: "192.168.124.0/24"
+      dns_nameservers:
+        - 192.168.124.1
+        - 8.8.8.8
+      gateway_ip: "192.168.124.1"          
+      allocation_pools:
+        - start: "192.168.124.200"
+          end: "192.168.124.240"
+
+  internal_network:
+    type: OS::Neutron::Net
+    properties:
+      name: "internal"
+
+  internal_network_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: "internal network"
+      network:
+        get_resource: internal_network
+      cidr: "172.16.0.0/24"
+      dns_nameservers:
+        - 192.168.124.1
+        - 8.8.8.8
+      gateway_ip: "172.16.0.1"
+      allocation_pools:
+        - start: "172.16.0.5"
+          end: "172.16.0.250"
+
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        enable_snat: true
+        network:
+          get_resource: external_network
+
+  internal_svi:
+    type: OS::Neutron::RouterInterface
+    depends_on:
+      - internal_network_subnet
+      - internal_network
+    properties:
+      router:
+        get_resource: router
+      subnet:
+        get_resource: internal_network_subnet
